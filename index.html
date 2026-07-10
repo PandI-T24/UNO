@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全ネット対戦対応 デジタルUNO</title>
-    <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room@1.3.2/dist/skyway_room.js"></script>
+    <title>完全無料・キー不要 ネット対戦UNO</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -63,12 +63,12 @@
 </head>
 <body>
 
-    <div id="status-display" class="status-bar">ネットワーク: 待機中</div>
+    <div id="status-display" class="status-bar">ネットワーク: サーバー接続中...</div>
 
     <div id="lobby-screen" class="screen">
         <div class="centered-box">
             <h1 style="color: #00ffcc;">UNO MULTIPLAYER</h1>
-            <p style="color: #888;">世界中の端末と4桁コードでリアルタイム対戦</p>
+            <p style="color: #888;">登録不要！4桁コードでリアルタイム対戦</p>
             <hr style="border:0; border-top:1px solid #222; margin:20px 0;">
             <button id="btn-create">部屋を新規作成</button>
             <div style="margin: 20px 0; color: #555;">OR</div>
@@ -86,7 +86,7 @@
                 <div id="slot-p1" class="slot"><div>👑</div><div id="name-p1">Empty</div></div>
                 <div id="slot-p2" class="slot"><div>👤</div><div id="name-p2">Empty</div></div>
             </div>
-            <p id="waiting-msg" style="color:#888; font-size:14px; margin-bottom:20px;">通信を確立しています...</p>
+            <p id="waiting-msg" style="color:#888; font-size:14px; margin-bottom:20px;">相手の接続を待っています...</p>
             <button id="btn-start-game" class="hidden" style="width:100%; padding:15px; background:#00ffcc;">ゲームを開始する</button>
         </div>
     </div>
@@ -111,14 +111,11 @@
     </div>
 
     <script>
-        // 🔑 テスト用共有アプリケーションKey (SkyWay無料パブリックキー)
-        const SKYWAY_KEY = '6fbe87c8-9189-42b4-82ee-209f87c10b7b'; 
-        
-        let roomContext, localToken, skywayRoom;
-        let dataContext = null; 
-        
+        let peer = null;
+        let conn = null; // 通信コネクション
         let currentRoomCode = null;
         let myRole = null; // "player1"(ホスト) または "player2"(ゲスト)
+        
         let gameState = {
             isStarted: false,
             discardPile: { color: 'red', value: '7' },
@@ -129,47 +126,101 @@
         const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Skip', 'Reverse'];
         function getRandomCard() { return { color: colors[Math.floor(Math.random()*4)], value: values[Math.floor(Math.random()*12)] }; }
 
-        // 初期化処理
-        async function initSkyWay(roomCode) {
-            document.getElementById('status-display').innerText = "ネットワーク: 接続中...";
-            try {
-                const { SkyWayContext, SkyWayRoom } = skyway_room;
-                roomContext = await SkyWayContext.Create(SKYWAY_KEY);
-                skywayRoom = await SkyWayRoom.FindOrCreate(roomContext, { type: 'p2p', name: 'uno_' + roomCode });
-                localToken = await skywayRoom.join();
-                
-                // データ通信用の通り道を解放
-                dataContext = await skywayRoom.publishData();
-                
-                // 相手からのデータを受信した時のイベント処理
-                skywayRoom.onDataReceived.add(({ data, member }) => {
-                    const message = JSON.parse(data);
-                    handleNetworkMessage(message);
-                });
+        // 共通で使えるパブリックな中継サーバーに接続
+        peer = new Peer({
+            host: '0.peerjs.com',
+            port: 443,
+            secure: true
+        });
 
-                document.getElementById('status-display').innerText = `ネットワーク: 接続完了 (${myRole})`;
-                
-                // ゲストが入ってきたらホストが感知してデータを送る
-                if(myRole === "player2") {
-                    sendNetMessage({ type: 'GUEST_JOINED' });
+        peer.on('open', (id) => {
+            document.getElementById('status-display').innerText = "ネットワーク: 準備完了";
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            if(err.type === 'unavailable-id') {
+                alert("このコードの部屋はすでに使われています。もう一度作成し直してください。");
+            } else {
+                alert("通信エラーが発生しました。");
+            }
+        });
+
+        // --- 部屋新規作成（ホスト） ---
+        document.getElementById('btn-create').addEventListener('click', () => {
+            // パブリックサーバー上に独自の4桁コードのIDを予約登録する
+            currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+            myRole = "player1";
+            
+            gameState.discardPile = getRandomCard();
+            gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
+
+            // 4桁コード付きの特別なPeerを再作成して待ち受ける
+            peer.destroy();
+            peer = new Peer('uno-room-' + currentRoomCode, { host: '0.peerjs.com', port: 443, secure: true });
+
+            peer.on('open', () => {
+                showWaitingRoom();
+                updateWaitingUI();
+            });
+
+            // ゲストが接続してきたときの処理
+            peer.on('connection', (incomingConn) => {
+                conn = incomingConn;
+                setupConnection();
+            });
+        });
+
+        // --- 部屋入室（ゲスト） ---
+        document.getElementById('btn-join').addEventListener('click', () => {
+            const code = document.getElementById('room-code-input').value.trim();
+            if(code.length !== 4) { alert("4桁のコードを入力してください"); return; }
+            
+            currentRoomCode = code;
+            myRole = "player2";
+            showWaitingRoom();
+            document.getElementById('waiting-msg').innerText = "ホストの部屋を探しています...";
+
+            // ホストの4桁IDめがけて接続を申し込む
+            conn = peer.connect('uno-room-' + code);
+            
+            conn.on('open', () => {
+                setupConnection();
+                // 参加したことをホストに通知
+                sendNetMessage({ type: 'GUEST_JOINED' });
+            });
+            
+            setTimeout(() => {
+                if(!conn.open) {
+                    alert("部屋が見つからないか、満員です。コードを確認してください。");
+                    location.reload();
                 }
-            } catch (e) {
-                console.error(e);
-                alert("通信の初期化に失敗しました。時間をおいて試してください。");
-            }
+            }, 5000);
+        });
+
+        // データ通信のイベント割り当て
+        function setupConnection() {
+            document.getElementById('status-display').innerText = `ネットワーク: 接続中 (${myRole})`;
+            
+            conn.on('data', (data) => {
+                handleNetworkMessage(data);
+            });
+
+            conn.on('close', () => {
+                alert("対戦相手が切断しました。");
+                location.reload();
+            });
         }
 
-        // メッセージ送信関数
         function sendNetMessage(obj) {
-            if (dataContext) {
-                dataContext.write(JSON.stringify(obj));
+            if (conn && conn.open) {
+                conn.send(obj);
             }
         }
 
-        // メッセージ受信ハンドラ（ここで他人の端末の動きをキャッチする）
+        // 受信したデータの仕分け
         function handleNetworkMessage(msg) {
             if (msg.type === 'GUEST_JOINED' && myRole === 'player1') {
-                // ゲストが来たら初期の手札を生成してホストが全員に共有
                 gameState.hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateWaitingUI();
@@ -184,31 +235,6 @@
             }
         }
 
-        // 部屋新規作成（ホスト）
-        document.getElementById('btn-create').addEventListener('click', async () => {
-            currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
-            myRole = "player1";
-            
-            gameState.discardPile = getRandomCard();
-            gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
-
-            showWaitingRoom();
-            await initSkyWay(currentRoomCode);
-            updateWaitingUI();
-        });
-
-        // 部屋入室（ゲスト）
-        document.getElementById('btn-join').addEventListener('click', async () => {
-            const code = document.getElementById('room-code-input').value.trim();
-            if(code.length !== 4) { alert("4桁のコードを入力してください"); return; }
-            currentRoomCode = code;
-            myRole = "player2";
-
-            showWaitingRoom();
-            document.getElementById('waiting-msg').innerText = "ホストと同期しています...";
-            await initSkyWay(currentRoomCode);
-        });
-
         function showWaitingRoom() {
             document.getElementById('lobby-screen').classList.add('hidden');
             document.getElementById('waiting-screen').classList.remove('hidden');
@@ -218,23 +244,21 @@
         function updateWaitingUI() {
             document.getElementById('slot-p1').classList.add('active');
             document.getElementById('name-p1').innerText = "ホストプレイヤー";
-            document.getElementById('name-p1').style.color = "#00ffcc";
 
-            if (myRole === "player2" || gameState.hands.player2.length > 0) {
+            if (myRole === "player2" || (gameState.hands.player2 && gameState.hands.player2.length > 0)) {
                 document.getElementById('slot-p2').classList.add('active');
                 document.getElementById('name-p2').innerText = "ゲストプレイヤー";
-                document.getElementById('name-p2').style.color = "#ffaa00";
-                document.getElementById('waiting-msg').innerText = "対戦相手が接続しました！";
+                document.getElementById('waiting-msg').innerText = "プレイヤーが揃いました！";
                 
                 if (myRole === "player1") {
                     document.getElementById('btn-start-game').classList.remove('hidden');
                 }
             } else {
-                document.getElementById('waiting-msg').innerText = "対戦相手の入室を待っています（4桁コードを相手に伝えてください）";
+                document.getElementById('waiting-msg').innerText = "対戦相手の入室を待っています...";
             }
         }
 
-        // ホストがゲーム開始ボタンを押した時
+        // ホストがゲーム開始
         document.getElementById('btn-start-game').addEventListener('click', () => {
             gameState.isStarted = true;
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
@@ -253,7 +277,6 @@
             document.getElementById('my-name').innerText = `あなた (${myRole === 'player1' ? 'ホスト' : 'ゲスト'})`;
             document.getElementById('opp-name').innerText = myRole === 'player1' ? 'ゲストプレイヤー' : 'ホストプレイヤー';
 
-            // 場札の反映
             const discard = document.getElementById('discard-card');
             discard.className = `card ${gameState.discardPile.color}`;
             discard.innerText = gameState.discardPile.value;
@@ -269,7 +292,7 @@
                 myHandDiv.appendChild(cardEl);
             });
 
-            // ② 相手の手札（裏面マスク・中身は見えない）
+            // ② 相手の手札（裏面マスク）
             const oppHandDiv = document.getElementById('opponent-hand');
             oppHandDiv.innerHTML = '';
             const oppCount = gameState.hands[oppRole] ? gameState.hands[oppRole].length : 0;
@@ -280,14 +303,12 @@
             }
         }
 
-        // カードを出す
         function playCard(index) {
             const myHand = gameState.hands[myRole];
             const card = myHand[index];
 
             if(card.color === gameState.discardPile.color || card.value === gameState.discardPile.value) {
                 gameState.discardPile = myHand.splice(index, 1)[0];
-                // サーバー（通信網）を介して相手に状態を送信
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateBattleUI();
                 if(myHand.length === 0) alert("あなたの勝ちです！");
@@ -296,7 +317,6 @@
             }
         }
 
-        // カードを引く
         document.getElementById('btn-deck').addEventListener('click', () => {
             gameState.hands[myRole].push(getRandomCard());
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
