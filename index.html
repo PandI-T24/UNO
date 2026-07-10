@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全無料・キー不要 ネット対戦UNO</title>
+    <title>完全ターン制対応 ネット対戦UNO</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
@@ -40,15 +40,39 @@
         #game-board { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; max-width: 1200px; margin: 0 auto; }
         #opponents-zone { display: flex; justify-content: center; gap: 40px; width: 100%; padding: 10px 0; }
         .opponent-profile { background: rgba(255, 255, 255, 0.05); padding: 10px 20px; border-radius: 12px; text-align: center; border-top: 3px solid #ff5555; min-width: 200px; }
+        
+        /* ターン表示インジケーター */
+        #turn-indicator {
+            font-size: 20px; font-weight: bold; padding: 10px 30px; border-radius: 30px;
+            text-align: center; margin: 10px auto; width: fit-content;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5); letter-spacing: 1px;
+        }
+        .my-turn-bg { background: #00ffcc; color: #05050a; animation: pulse 2s infinite; }
+        .opp-turn-bg { background: #333; color: #888; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px rgba(0,255,204,0.5); }
+            50% { box-shadow: 0 0 20px rgba(0,255,204,0.8); }
+            100% { box-shadow: 0 0 5px rgba(0,255,204,0.5); }
+        }
+
         #center-field { display: flex; justify-content: center; align-items: center; gap: 50px; flex-grow: 1; }
         #my-zone { width: 100%; padding: 20px 0; background: linear-gradient(to top, rgba(0,255,204,0.1), transparent); border-radius: 20px 20px 0 0; border-top: 1px solid rgba(0,255,204,0.2); text-align: center; }
         .card-container { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+        
         .card {
             width: 80px; height: 120px; border-radius: 10px; font-size: 24px; font-weight: bold; color: white;
             display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.5);
             border: 2px solid rgba(255,255,255,0.2); transition: all 0.2s ease;
         }
         .card:hover { transform: translateY(-20px); z-index: 10; box-shadow: 0 12px 24px rgba(0,255,204,0.4); }
+        
+        /* 相手のターン時に自分のカードを暗くする */
+        .card.disabled-card {
+            opacity: 0.4; cursor: not-allowed; filter: grayscale(50%);
+        }
+        .card.disabled-card:hover { transform: none; box-shadow: 0 6px 12px rgba(0,0,0,0.5); }
+
         .card.back {
             width: 45px; height: 65px; background: linear-gradient(135deg, #cc3333 0%, #881111 100%) !important;
             border: 2px solid #fff !important; cursor: not-allowed;
@@ -57,7 +81,10 @@
         .blue { background: linear-gradient(135deg, #5555ff 0%, #2222aa 100%); }
         .green { background: linear-gradient(135deg, #55aa55 0%, #226622 100%); }
         .yellow { background: linear-gradient(135deg, #ffaa00 0%, #996600 100%); }
+        
         #btn-deck { width: 85px; height: 125px; background: #222; border: 2px solid #00ffcc; border-radius: 10px; color: #00ffcc; font-weight: bold; cursor: pointer; }
+        #btn-deck.disabled-deck { opacity: 0.3; cursor: not-allowed; border-color: #555; color: #555; }
+
         .status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 12px; color: #aaa; }
     </style>
 </head>
@@ -68,7 +95,7 @@
     <div id="lobby-screen" class="screen">
         <div class="centered-box">
             <h1 style="color: #00ffcc;">UNO MULTIPLAYER</h1>
-            <p style="color: #888;">登録不要！4桁コードでリアルタイム対戦</p>
+            <p style="color: #888;">登録不要！4桁コードでリアルタイムターン制対戦</p>
             <hr style="border:0; border-top:1px solid #222; margin:20px 0;">
             <button id="btn-create">部屋を新規作成</button>
             <div style="margin: 20px 0; color: #555;">OR</div>
@@ -93,16 +120,21 @@
 
     <div id="game-screen" class="screen hidden">
         <div id="game-board">
+            
             <div id="opponents-zone">
                 <div class="opponent-profile">
                     <div id="opp-name" style="font-weight: bold; font-size:14px; color:#ff5555;">対戦相手</div>
                     <div id="opponent-hand" class="card-container"></div>
                 </div>
             </div>
+
+            <div id="turn-indicator" class="my-turn-bg">あなたの番です</div>
+
             <div id="center-field">
                 <div><button id="btn-deck">DRAW</button></div>
                 <div><div id="discard-card" class="card red">7</div></div>
             </div>
+
             <div id="my-zone">
                 <div id="my-name" style="font-weight:bold; color:#00ffcc; font-size:14px;">YOUR HAND</div>
                 <div id="my-hand" class="card-container"></div>
@@ -112,113 +144,65 @@
 
     <script>
         let peer = null;
-        let conn = null; // 通信コネクション
+        let conn = null;
         let currentRoomCode = null;
-        let myRole = null; // "player1"(ホスト) または "player2"(ゲスト)
+        let myRole = null; 
         
         let gameState = {
             isStarted: false,
+            currentTurn: "player1", // 🚨 ターンを管理 ("player1"か"player2")
             discardPile: { color: 'red', value: '7' },
             hands: { player1: [], player2: [] }
         };
 
         const colors = ['red', 'blue', 'green', 'yellow'];
-        const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Skip', 'Reverse'];
-        function getRandomCard() { return { color: colors[Math.floor(Math.random()*4)], value: values[Math.floor(Math.random()*12)] }; }
+        const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        function getRandomCard() { return { color: colors[Math.floor(Math.random()*4)], value: values[Math.floor(Math.random()*10)] }; }
 
-        // 共通で使えるパブリックな中継サーバーに接続
-        peer = new Peer({
-            host: '0.peerjs.com',
-            port: 443,
-            secure: true
-        });
+        peer = new Peer({ host: '0.peerjs.com', port: 443, secure: true });
+        peer.on('open', () => { document.getElementById('status-display').innerText = "ネットワーク: 準備完了"; });
 
-        peer.on('open', (id) => {
-            document.getElementById('status-display').innerText = "ネットワーク: 準備完了";
-        });
-
-        peer.on('error', (err) => {
-            console.error(err);
-            if(err.type === 'unavailable-id') {
-                alert("このコードの部屋はすでに使われています。もう一度作成し直してください。");
-            } else {
-                alert("通信エラーが発生しました。");
-            }
-        });
-
-        // --- 部屋新規作成（ホスト） ---
+        // 部屋新規作成（ホスト）
         document.getElementById('btn-create').addEventListener('click', () => {
-            // パブリックサーバー上に独自の4桁コードのIDを予約登録する
             currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
             myRole = "player1";
             
+            gameState.currentTurn = "player1"; // 最初はホスト（P1）のターン
             gameState.discardPile = getRandomCard();
             gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
 
-            // 4桁コード付きの特別なPeerを再作成して待ち受ける
             peer.destroy();
             peer = new Peer('uno-room-' + currentRoomCode, { host: '0.peerjs.com', port: 443, secure: true });
-
-            peer.on('open', () => {
-                showWaitingRoom();
-                updateWaitingUI();
-            });
-
-            // ゲストが接続してきたときの処理
-            peer.on('connection', (incomingConn) => {
-                conn = incomingConn;
-                setupConnection();
-            });
+            peer.on('open', () => { showWaitingRoom(); updateWaitingUI(); });
+            peer.on('connection', (incomingConn) => { conn = incomingConn; setupConnection(); });
         });
 
-        // --- 部屋入室（ゲスト） ---
+        // 部屋入室（ゲスト）
         document.getElementById('btn-join').addEventListener('click', () => {
             const code = document.getElementById('room-code-input').value.trim();
             if(code.length !== 4) { alert("4桁のコードを入力してください"); return; }
-            
             currentRoomCode = code;
             myRole = "player2";
             showWaitingRoom();
             document.getElementById('waiting-msg').innerText = "ホストの部屋を探しています...";
 
-            // ホストの4桁IDめがけて接続を申し込む
             conn = peer.connect('uno-room-' + code);
-            
             conn.on('open', () => {
                 setupConnection();
-                // 参加したことをホストに通知
                 sendNetMessage({ type: 'GUEST_JOINED' });
             });
-            
-            setTimeout(() => {
-                if(!conn.open) {
-                    alert("部屋が見つからないか、満員です。コードを確認してください。");
-                    location.reload();
-                }
-            }, 5000);
         });
 
-        // データ通信のイベント割り当て
         function setupConnection() {
             document.getElementById('status-display').innerText = `ネットワーク: 接続中 (${myRole})`;
-            
-            conn.on('data', (data) => {
-                handleNetworkMessage(data);
-            });
-
-            conn.on('close', () => {
-                alert("対戦相手が切断しました。");
-                location.reload();
-            });
+            conn.on('data', (data) => { handleNetworkMessage(data); });
+            conn.on('close', () => { alert("対戦相手が切断しました。"); location.reload(); });
         }
 
         function sendNetMessage(obj) {
-            if (conn && conn.open) {
-                conn.send(obj);
-            }
+            if (conn && conn.open) { conn.send(obj); }
         }
 
-        // 受信したデータの仕分け
         function handleNetworkMessage(msg) {
             if (msg.type === 'GUEST_JOINED' && myRole === 'player1') {
                 gameState.hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
@@ -249,16 +233,10 @@
                 document.getElementById('slot-p2').classList.add('active');
                 document.getElementById('name-p2').innerText = "ゲストプレイヤー";
                 document.getElementById('waiting-msg').innerText = "プレイヤーが揃いました！";
-                
-                if (myRole === "player1") {
-                    document.getElementById('btn-start-game').classList.remove('hidden');
-                }
-            } else {
-                document.getElementById('waiting-msg').innerText = "対戦相手の入室を待っています...";
+                if (myRole === "player1") document.getElementById('btn-start-game').classList.remove('hidden');
             }
         }
 
-        // ホストがゲーム開始
         document.getElementById('btn-start-game').addEventListener('click', () => {
             gameState.isStarted = true;
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
@@ -274,6 +252,20 @@
         function updateBattleUI() {
             const oppRole = (myRole === "player1") ? "player2" : "player1";
 
+            // 🚨 ターンインジケーターの更新
+            const turnIndicator = document.getElementById('turn-indicator');
+            const isMyTurn = (gameState.currentTurn === myRole);
+
+            if (isMyTurn) {
+                turnIndicator.innerText = "YOUR TURN (あなたの番)";
+                turnIndicator.className = "my-turn-bg";
+                document.getElementById('btn-deck').classList.remove('disabled-deck');
+            } else {
+                turnIndicator.innerText = "OPPONENT TURN (相手の思考中...)";
+                turnIndicator.className = "opp-turn-bg";
+                document.getElementById('btn-deck').classList.add('disabled-deck');
+            }
+
             document.getElementById('my-name').innerText = `あなた (${myRole === 'player1' ? 'ホスト' : 'ゲスト'})`;
             document.getElementById('opp-name').innerText = myRole === 'player1' ? 'ゲストプレイヤー' : 'ホストプレイヤー';
 
@@ -281,18 +273,19 @@
             discard.className = `card ${gameState.discardPile.color}`;
             discard.innerText = gameState.discardPile.value;
 
-            // ① 自分の手札（見える・出せる）
+            // ① 自分の手札の描画
             const myHandDiv = document.getElementById('my-hand');
             myHandDiv.innerHTML = '';
             gameState.hands[myRole].forEach((card, index) => {
                 const cardEl = document.createElement('div');
-                cardEl.className = `card ${card.color}`;
+                // 自分のターンじゃない時はクラスを追加して暗くする
+                cardEl.className = `card ${card.color} ${isMyTurn ? '' : 'disabled-card'}`;
                 cardEl.innerText = card.value;
                 cardEl.addEventListener('click', () => playCard(index));
                 myHandDiv.appendChild(cardEl);
             });
 
-            // ② 相手の手札（裏面マスク）
+            // ② 相手の手札の描画
             const oppHandDiv = document.getElementById('opponent-hand');
             oppHandDiv.innerHTML = '';
             const oppCount = gameState.hands[oppRole] ? gameState.hands[oppRole].length : 0;
@@ -303,12 +296,20 @@
             }
         }
 
+        // カードを出す処理
         function playCard(index) {
+            // 🚨 自分のターンじゃなければ、処理を完全にブロック
+            if (gameState.currentTurn !== myRole) return;
+
             const myHand = gameState.hands[myRole];
             const card = myHand[index];
 
             if(card.color === gameState.discardPile.color || card.value === gameState.discardPile.value) {
                 gameState.discardPile = myHand.splice(index, 1)[0];
+                
+                // 🚨 ターンを相手に交代する
+                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
+                
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateBattleUI();
                 if(myHand.length === 0) alert("あなたの勝ちです！");
@@ -317,8 +318,16 @@
             }
         }
 
+        // カードを引く処理
         document.getElementById('btn-deck').addEventListener('click', () => {
+            // 🚨 自分のターンじゃなければ、処理を完全にブロック
+            if (gameState.currentTurn !== myRole) return;
+
             gameState.hands[myRole].push(getRandomCard());
+            
+            // 🚨 カードを引いたらターンを相手に交代する
+            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
+            
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
             updateBattleUI();
         });
