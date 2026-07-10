@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全ターン制対応 ネット対戦UNO</title>
+    <title>公式ルール完全準拠 ネット対戦UNO</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
@@ -37,11 +37,10 @@
         .slots-container { display: flex; justify-content: space-around; margin: 25px 0; gap: 15px; }
         .slot { background: rgba(255,255,255,0.03); border: 2px dashed #444; border-radius: 15px; width: 45%; padding: 15px; }
         .slot.active { border: 2px solid #00ffcc; background: rgba(0,255,204,0.08); }
-        #game-board { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; max-width: 1200px; margin: 0 auto; }
+        #game-board { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; max-width: 1200px; margin: 0 auto; position: relative; }
         #opponents-zone { display: flex; justify-content: center; gap: 40px; width: 100%; padding: 10px 0; }
         .opponent-profile { background: rgba(255, 255, 255, 0.05); padding: 10px 20px; border-radius: 12px; text-align: center; border-top: 3px solid #ff5555; min-width: 200px; }
         
-        /* ターン表示インジケーター */
         #turn-indicator {
             font-size: 20px; font-weight: bold; padding: 10px 30px; border-radius: 30px;
             text-align: center; margin: 10px auto; width: fit-content;
@@ -67,10 +66,7 @@
         }
         .card:hover { transform: translateY(-20px); z-index: 10; box-shadow: 0 12px 24px rgba(0,255,204,0.4); }
         
-        /* 相手のターン時に自分のカードを暗くする */
-        .card.disabled-card {
-            opacity: 0.4; cursor: not-allowed; filter: grayscale(50%);
-        }
+        .card.disabled-card { opacity: 0.4; cursor: not-allowed; filter: grayscale(50%); }
         .card.disabled-card:hover { transform: none; box-shadow: 0 6px 12px rgba(0,0,0,0.5); }
 
         .card.back {
@@ -85,6 +81,14 @@
         #btn-deck { width: 85px; height: 125px; background: #222; border: 2px solid #00ffcc; border-radius: 10px; color: #00ffcc; font-weight: bold; cursor: pointer; }
         #btn-deck.disabled-deck { opacity: 0.3; cursor: not-allowed; border-color: #555; color: #555; }
 
+        /* 👑 公式追加：引いたカードをどうするか選ぶモーダル */
+        .choice-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
+        }
+        .choice-box { background: #222; padding: 30px; border-radius: 15px; border: 2px solid #00ffcc; text-align: center; }
+
         .status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 12px; color: #aaa; }
     </style>
 </head>
@@ -95,7 +99,7 @@
     <div id="lobby-screen" class="screen">
         <div class="centered-box">
             <h1 style="color: #00ffcc;">UNO MULTIPLAYER</h1>
-            <p style="color: #888;">登録不要！4桁コードでリアルタイムターン制対戦</p>
+            <p style="color: #888;">公式ルール完全準拠・リアルタイム対戦</p>
             <hr style="border:0; border-top:1px solid #222; margin:20px 0;">
             <button id="btn-create">部屋を新規作成</button>
             <div style="margin: 20px 0; color: #555;">OR</div>
@@ -119,8 +123,20 @@
     </div>
 
     <div id="game-screen" class="screen hidden">
+        
+        <div id="choice-screen" class="choice-overlay hidden">
+            <div class="choice-box">
+                <h3 style="color:#00ffcc; margin-top:0;">カードを引きました！</h3>
+                <p>このカードは今すぐ場に出せます。どうしますか？</p>
+                <div id="drawn-card-preview" style="margin: 20px auto;" class="card red">7</div>
+                <div style="display:flex; gap:15px; justify-content:center;">
+                    <button id="btn-choice-play" style="background:#00ffcc; color:#000;">今すぐ出す</button>
+                    <button id="btn-choice-keep" style="background:#555; color:#fff;">手札にキープ(パス)</button>
+                </div>
+            </div>
+        </div>
+
         <div id="game-board">
-            
             <div id="opponents-zone">
                 <div class="opponent-profile">
                     <div id="opp-name" style="font-weight: bold; font-size:14px; color:#ff5555;">対戦相手</div>
@@ -147,10 +163,11 @@
         let conn = null;
         let currentRoomCode = null;
         let myRole = null; 
+        let tempDrawnCard = null; // 引いたカードの一時保存用
         
         let gameState = {
             isStarted: false,
-            currentTurn: "player1", // 🚨 ターンを管理 ("player1"か"player2")
+            currentTurn: "player1", 
             discardPile: { color: 'red', value: '7' },
             hands: { player1: [], player2: [] }
         };
@@ -162,14 +179,12 @@
         peer = new Peer({ host: '0.peerjs.com', port: 443, secure: true });
         peer.on('open', () => { document.getElementById('status-display').innerText = "ネットワーク: 準備完了"; });
 
-        // 部屋新規作成（ホスト）
         document.getElementById('btn-create').addEventListener('click', () => {
             currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
             myRole = "player1";
-            
-            gameState.currentTurn = "player1"; // 最初はホスト（P1）のターン
+            gameState.currentTurn = "player1"; 
             gameState.discardPile = getRandomCard();
-            gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
+            gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
 
             peer.destroy();
             peer = new Peer('uno-room-' + currentRoomCode, { host: '0.peerjs.com', port: 443, secure: true });
@@ -177,14 +192,12 @@
             peer.on('connection', (incomingConn) => { conn = incomingConn; setupConnection(); });
         });
 
-        // 部屋入室（ゲスト）
         document.getElementById('btn-join').addEventListener('click', () => {
             const code = document.getElementById('room-code-input').value.trim();
             if(code.length !== 4) { alert("4桁のコードを入力してください"); return; }
             currentRoomCode = code;
             myRole = "player2";
             showWaitingRoom();
-            document.getElementById('waiting-msg').innerText = "ホストの部屋を探しています...";
 
             conn = peer.connect('uno-room-' + code);
             conn.on('open', () => {
@@ -199,23 +212,17 @@
             conn.on('close', () => { alert("対戦相手が切断しました。"); location.reload(); });
         }
 
-        function sendNetMessage(obj) {
-            if (conn && conn.open) { conn.send(obj); }
-        }
+        function sendNetMessage(obj) { if (conn && conn.open) { conn.send(obj); } }
 
         function handleNetworkMessage(msg) {
             if (msg.type === 'GUEST_JOINED' && myRole === 'player1') {
-                gameState.hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
+                gameState.hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateWaitingUI();
             }
             if (msg.type === 'SYNC_STATE') {
                 gameState = msg.state;
-                if (gameState.isStarted) {
-                    showBattleField();
-                } else {
-                    updateWaitingUI();
-                }
+                if (gameState.isStarted) showBattleField(); else updateWaitingUI();
             }
         }
 
@@ -228,11 +235,9 @@
         function updateWaitingUI() {
             document.getElementById('slot-p1').classList.add('active');
             document.getElementById('name-p1').innerText = "ホストプレイヤー";
-
             if (myRole === "player2" || (gameState.hands.player2 && gameState.hands.player2.length > 0)) {
                 document.getElementById('slot-p2').classList.add('active');
                 document.getElementById('name-p2').innerText = "ゲストプレイヤー";
-                document.getElementById('waiting-msg').innerText = "プレイヤーが揃いました！";
                 if (myRole === "player1") document.getElementById('btn-start-game').classList.remove('hidden');
             }
         }
@@ -251,8 +256,6 @@
 
         function updateBattleUI() {
             const oppRole = (myRole === "player1") ? "player2" : "player1";
-
-            // 🚨 ターンインジケーターの更新
             const turnIndicator = document.getElementById('turn-indicator');
             const isMyTurn = (gameState.currentTurn === myRole);
 
@@ -273,19 +276,16 @@
             discard.className = `card ${gameState.discardPile.color}`;
             discard.innerText = gameState.discardPile.value;
 
-            // ① 自分の手札の描画
             const myHandDiv = document.getElementById('my-hand');
             myHandDiv.innerHTML = '';
             gameState.hands[myRole].forEach((card, index) => {
                 const cardEl = document.createElement('div');
-                // 自分のターンじゃない時はクラスを追加して暗くする
                 cardEl.className = `card ${card.color} ${isMyTurn ? '' : 'disabled-card'}`;
                 cardEl.innerText = card.value;
                 cardEl.addEventListener('click', () => playCard(index));
                 myHandDiv.appendChild(cardEl);
             });
 
-            // ② 相手の手札の描画
             const oppHandDiv = document.getElementById('opponent-hand');
             oppHandDiv.innerHTML = '';
             const oppCount = gameState.hands[oppRole] ? gameState.hands[oppRole].length : 0;
@@ -296,20 +296,15 @@
             }
         }
 
-        // カードを出す処理
+        // 手札から通常通りカードを出す場合（1枚出したら即ターン終了）
         function playCard(index) {
-            // 🚨 自分のターンじゃなければ、処理を完全にブロック
             if (gameState.currentTurn !== myRole) return;
-
             const myHand = gameState.hands[myRole];
             const card = myHand[index];
 
             if(card.color === gameState.discardPile.color || card.value === gameState.discardPile.value) {
                 gameState.discardPile = myHand.splice(index, 1)[0];
-                
-                // 🚨 ターンを相手に交代する
-                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
-                
+                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // 交代
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateBattleUI();
                 if(myHand.length === 0) alert("あなたの勝ちです！");
@@ -318,16 +313,46 @@
             }
         }
 
-        // カードを引く処理
+        // 👑 山札からカードを引く処理（公式ルール準拠）
         document.getElementById('btn-deck').addEventListener('click', () => {
-            // 🚨 自分のターンじゃなければ、処理を完全にブロック
             if (gameState.currentTurn !== myRole) return;
 
-            gameState.hands[myRole].push(getRandomCard());
-            
-            // 🚨 カードを引いたらターンを相手に交代する
-            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
-            
+            // 山札から1枚生成
+            tempDrawnCard = getRandomCard();
+
+            // 引いたカードが場に出せるかチェック
+            const canPlay = (tempDrawnCard.color === gameState.discardPile.color || tempDrawnCard.value === gameState.discardPile.value);
+
+            if (canPlay) {
+                // 出せる場合はポップアップを表示してプレイヤーに選択させる（ターンはまだ交代しない）
+                const preview = document.getElementById('drawn-card-preview');
+                preview.className = `card ${tempDrawnCard.color}`;
+                preview.innerText = tempDrawnCard.value;
+                document.getElementById('choice-screen').classList.remove('hidden');
+            } else {
+                // 出せない場合は自動で手札に加え、そのままパス（ターン交代）
+                gameState.hands[myRole].push(tempDrawnCard);
+                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
+                sendNetMessage({ type: 'SYNC_STATE', state: gameState });
+                updateBattleUI();
+                alert(`出せないカード（${tempDrawnCard.color}の${tempDrawnCard.value}）を引いたためパスになります。`);
+            }
+        });
+
+        // 👑 モーダル選択肢1：「今すぐ出す」を選んだ場合
+        document.getElementById('btn-choice-play').addEventListener('click', () => {
+            document.getElementById('choice-screen').classList.add('hidden');
+            gameState.discardPile = tempDrawnCard; // 場に出す
+            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // ターン交代
+            sendNetMessage({ type: 'SYNC_STATE', state: gameState });
+            updateBattleUI();
+        });
+
+        // 👑 モーダル選択肢2：「手札にキープ」を選んだ場合
+        document.getElementById('btn-choice-keep').addEventListener('click', () => {
+            document.getElementById('choice-screen').classList.add('hidden');
+            gameState.hands[myRole].push(tempDrawnCard); // 手札に入れる
+            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // ターン交代
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
             updateBattleUI();
         });
