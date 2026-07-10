@@ -1,434 +1,267 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>本格デジタル対戦風 UNO</title>
+    <title>完全ネット対戦対応 デジタルUNO</title>
+    <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room@1.3.2/dist/skyway_room.js"></script>
     <style>
-        /* 全体のデザイン（近未来・デジタルカードゲーム風） */
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
             background: radial-gradient(circle, #1a1a2e 0%, #0f0f1a 100%);
-            color: #fff;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            overflow: hidden;
-            box-sizing: border-box;
+            color: #fff; margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; box-sizing: border-box;
         }
-
-        .screen {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-            padding: 20px;
-        }
-
+        .screen { width: 100vw; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 20px; }
         .hidden { display: none !important; }
-
-        /* === 1. ロビー・待機室のデザイン === */
         .centered-box {
-            background: rgba(25, 25, 45, 0.85);
-            backdrop-filter: blur(10px);
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-            width: 90%;
-            max-width: 500px;
-            text-align: center;
-            margin: auto;
+            background: rgba(25, 25, 45, 0.85); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 90%; max-width: 500px; text-align: center; margin: auto;
             border: 1px solid rgba(0, 255, 204, 0.2);
         }
-
         input {
-            padding: 12px;
-            font-size: 20px;
-            width: 160px;
-            text-align: center;
-            border: 2px solid #333;
-            border-radius: 8px;
-            background: #05050a;
-            color: #fff;
-            margin-bottom: 20px;
+            padding: 12px; font-size: 20px; width: 160px; text-align: center;
+            border: 2px solid #333; border-radius: 8px; background: #05050a; color: #fff; margin-bottom: 20px;
         }
-
         button {
-            padding: 12px 30px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            background: #00ffcc;
-            color: #05050a;
-            border: none;
-            border-radius: 30px;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 15px rgba(0,255,204,0.3);
+            padding: 12px 30px; font-size: 16px; font-weight: bold; cursor: pointer;
+            background: #00ffcc; color: #05050a; border: none; border-radius: 30px;
+            transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(0,255,204,0.3);
         }
-
-        button:hover {
-            background: #33ffdd;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,255,204,0.5);
-        }
-
-        /* プロセカ風待機スロット */
+        button:hover { background: #33ffdd; transform: translateY(-2px); }
         .room-code-tag {
-            font-size: 32px;
-            background: #000;
-            padding: 5px 20px;
-            border-radius: 10px;
-            display: inline-block;
-            letter-spacing: 2px;
-            color: #00ffcc;
-            margin: 15px 0;
-            border: 1px solid #222;
+            font-size: 32px; background: #000; padding: 5px 20px; border-radius: 10px;
+            display: inline-block; letter-spacing: 2px; color: #00ffcc; margin: 15px 0; border: 1px solid #222;
         }
-        .slots-container {
-            display: flex;
-            justify-content: space-around;
-            margin: 25px 0;
-            gap: 15px;
-        }
-        .slot {
-            background: rgba(255,255,255,0.03);
-            border: 2px dashed #444;
-            border-radius: 15px;
-            width: 45%;
-            padding: 15px;
-        }
-        .slot.active {
-            border: 2px solid #00ffcc;
-            background: rgba(0,255,204,0.08);
-        }
-
-        /* === 2. デジタルボード（戦闘画面風） === */
-        #game-board {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 100%;
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        /* 相手のエリア（上部に均等に配置） */
-        #opponents-zone {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            width: 100%;
-            padding: 10px 0;
-        }
-        .opponent-profile {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px 20px;
-            border-radius: 12px;
-            text-align: center;
-            border-top: 3px solid #ff5555;
-            min-width: 200px;
-        }
-
-        /* バトルの中心（場札と山札） */
-        #center-field {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 50px;
-            flex-grow: 1;
-            background: radial-gradient(circle, rgba(0,255,204,0.05) 0%, transparent 70%);
-        }
-
-        /* 自分のエリア（下部に大きく配置） */
-        #my-zone {
-            width: 100%;
-            padding: 20px 0;
-            background: linear-gradient(to top, rgba(0,255,204,0.1), transparent);
-            border-radius: 20px 20px 0 0;
-            border-top: 1px solid rgba(0,255,204,0.2);
-            text-align: center;
-        }
-
-        /* === 3. カードのデザイン === */
-        .card-container {
-            display: flex;
-            justify-content: center;
-            gap: -15px; /* 少し重ねる（デジタルTCG風） */
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-
+        .slots-container { display: flex; justify-content: space-around; margin: 25px 0; gap: 15px; }
+        .slot { background: rgba(255,255,255,0.03); border: 2px dashed #444; border-radius: 15px; width: 45%; padding: 15px; }
+        .slot.active { border: 2px solid #00ffcc; background: rgba(0,255,204,0.08); }
+        #game-board { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; max-width: 1200px; margin: 0 auto; }
+        #opponents-zone { display: flex; justify-content: center; gap: 40px; width: 100%; padding: 10px 0; }
+        .opponent-profile { background: rgba(255, 255, 255, 0.05); padding: 10px 20px; border-radius: 12px; text-align: center; border-top: 3px solid #ff5555; min-width: 200px; }
+        #center-field { display: flex; justify-content: center; align-items: center; gap: 50px; flex-grow: 1; }
+        #my-zone { width: 100%; padding: 20px 0; background: linear-gradient(to top, rgba(0,255,204,0.1), transparent); border-radius: 20px 20px 0 0; border-top: 1px solid rgba(0,255,204,0.2); text-align: center; }
+        .card-container { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
         .card {
-            width: 80px;
-            height: 120px;
-            border-radius: 10px;
-            font-size: 24px;
-            font-weight: bold;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.5);
-            user-select: none;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-            border: 2px solid rgba(255,255,255,0.2);
-            transition: all 0.2s ease;
-            margin: 0 5px;
+            width: 80px; height: 120px; border-radius: 10px; font-size: 24px; font-weight: bold; color: white;
+            display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.2); transition: all 0.2s ease;
         }
-        /* 重なりからホスト時に浮き上がる演出 */
-        .card:hover {
-            transform: translateY(-20px) scale(1.1);
-            z-index: 10;
-            box-shadow: 0 12px 24px rgba(0,255,204,0.4);
-        }
-        
-        /* 相手のミニ伏せカード */
+        .card:hover { transform: translateY(-20px); z-index: 10; box-shadow: 0 12px 24px rgba(0,255,204,0.4); }
         .card.back {
-            width: 45px;
-            height: 65px;
-            font-size: 10px;
-            background: linear-gradient(135deg, #cc3333 0%, #881111 100%) !important;
-            border: 2px solid #fff !important;
-            cursor: not-allowed;
-            margin: 0 2px;
+            width: 45px; height: 65px; background: linear-gradient(135deg, #cc3333 0%, #881111 100%) !important;
+            border: 2px solid #fff !important; cursor: not-allowed;
         }
-        .card.back:hover { transform: none; box-shadow: none; }
-
-        /* UNOカラー */
         .red { background: linear-gradient(135deg, #ff5555 0%, #aa2222 100%); }
         .blue { background: linear-gradient(135deg, #5555ff 0%, #2222aa 100%); }
         .green { background: linear-gradient(135deg, #55aa55 0%, #226622 100%); }
         .yellow { background: linear-gradient(135deg, #ffaa00 0%, #996600 100%); }
-
-        /* 山札ボタンのデザイン */
-        #btn-deck {
-            width: 85px;
-            height: 125px;
-            background: linear-gradient(135deg, #222 0%, #050505 100%);
-            border: 2px solid #00ffcc;
-            border-radius: 10px;
-            color: #00ffcc;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 0 15px rgba(0,255,204,0.3);
-        }
-
-        /* 開発者用テストパネル */
-        .test-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 100;
-            border: 1px solid #444;
-        }
+        #btn-deck { width: 85px; height: 125px; background: #222; border: 2px solid #00ffcc; border-radius: 10px; color: #00ffcc; font-weight: bold; cursor: pointer; }
+        .status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 12px; color: #aaa; }
     </style>
 </head>
 <body>
 
+    <div id="status-display" class="status-bar">ネットワーク: 待機中</div>
+
     <div id="lobby-screen" class="screen">
         <div class="centered-box">
-            <h1 style="color: #00ffcc; letter-spacing: 2px;">UNO DIGITAL</h1>
-            <p style="color: #888;">ルームを作成するか、4桁のコードを入力してください</p>
-            <hr style="border: 0; border-top: 1px solid #222; margin: 20px 0;">
-            
+            <h1 style="color: #00ffcc;">UNO MULTIPLAYER</h1>
+            <p style="color: #888;">世界中の端末と4桁コードでリアルタイム対戦</p>
+            <hr style="border:0; border-top:1px solid #222; margin:20px 0;">
             <button id="btn-create">部屋を新規作成</button>
             <div style="margin: 20px 0; color: #555;">OR</div>
             <input type="text" id="room-code-input" placeholder="4桁コード" maxlength="4">
             <br>
-            <button id="btn-join" style="background:#ffaa00; box-shadow: 0 4px 15px rgba(255,170,0,0.3);">部屋に入る</button>
+            <button id="btn-join" style="background:#ffaa00; color:#000;">部屋に入る</button>
         </div>
     </div>
 
     <div id="waiting-screen" class="screen hidden">
         <div class="centered-box">
             <h2 style="color:#00ffcc;">MATCHING ROOM</h2>
-            <div style="font-size:12px; color:#aaa;">部屋コード</div>
             <div id="waiting-room-code" class="room-code-tag">----</div>
-            
             <div class="slots-container">
-                <div id="slot-p1" class="slot">
-                    <div style="font-size:30px;">👑</div>
-                    <div id="name-p1" style="font-weight:bold; color:#666;">Empty</div>
-                    <span style="font-size:11px; background:#ffaa00; color:#000; padding:2px 5px; border-radius:3px;">HOST</span>
-                </div>
-                <div id="slot-p2" class="slot">
-                    <div style="font-size:30px;">👤</div>
-                    <div id="name-p2" style="font-weight:bold; color:#666;">Empty</div>
-                    <span style="font-size:11px; background:#00ffcc; color:#000; padding:2px 5px; border-radius:3px;">GUEST</span>
-                </div>
+                <div id="slot-p1" class="slot"><div>👑</div><div id="name-p1">Empty</div></div>
+                <div id="slot-p2" class="slot"><div>👤</div><div id="name-p2">Empty</div></div>
             </div>
-
-            <p id="waiting-msg" style="color:#888; font-size:14px; margin-bottom:20px;">プレイヤーの入室を待っています...</p>
-            
-            <button id="btn-start-game" class="hidden" style="width:100%; padding:15px; background:#00ffcc; font-size:18px;">ゲームを開始する</button>
-            <br>
-            <button id="btn-cancel" style="background:#444; color:#fff; font-size:12px; margin-top:15px; padding:5px 15px;">退室</button>
+            <p id="waiting-msg" style="color:#888; font-size:14px; margin-bottom:20px;">通信を確立しています...</p>
+            <button id="btn-start-game" class="hidden" style="width:100%; padding:15px; background:#00ffcc;">ゲームを開始する</button>
         </div>
     </div>
 
     <div id="game-screen" class="screen hidden">
-        
-        <div class="test-panel">
-            <span style="color:#ffaa00; font-weight:bold;">🧪 視点切り替え:</span>
-            <button id="btn-switch-p1" style="padding:2px 8px; font-size:11px;">P1(ホスト)</button>
-            <button id="btn-switch-p2" style="padding:2px 8px; font-size:11px;">P2(ゲスト)</button>
-        </div>
-
         <div id="game-board">
-            
             <div id="opponents-zone">
                 <div class="opponent-profile">
-                    <div id="opp-name" style="font-weight: bold; font-size:14px; color:#ff5555;">OPPONENT</div>
+                    <div id="opp-name" style="font-weight: bold; font-size:14px; color:#ff5555;">対戦相手</div>
                     <div id="opponent-hand" class="card-container"></div>
                 </div>
             </div>
-
             <div id="center-field">
-                <div>
-                    <div style="font-size:12px; color:#aaa; text-align:center; margin-bottom:5px;">DECK</div>
-                    <button id="btn-deck">DRAW</button>
-                </div>
-                <div>
-                    <div style="font-size:12px; color:#aaa; text-align:center; margin-bottom:5px;">DISCARD</div>
-                    <div id="discard-card" class="card red">7</div>
-                </div>
+                <div><button id="btn-deck">DRAW</button></div>
+                <div><div id="discard-card" class="card red">7</div></div>
             </div>
-
             <div id="my-zone">
                 <div id="my-name" style="font-weight:bold; color:#00ffcc; font-size:14px;">YOUR HAND</div>
                 <div id="my-hand" class="card-container"></div>
             </div>
-
         </div>
     </div>
 
     <script>
-        let serverRooms = {};
-        let currentRoomCode = null;
-        let currentActivePlayer = "player1"; // 見ている視点
-
-        const lobbyScreen = document.getElementById('lobby-screen');
-        const waitingScreen = document.getElementById('waiting-screen');
-        const gameScreen = document.getElementById('game-screen');
+        // 🔑 テスト用共有アプリケーションKey (SkyWay無料パブリックキー)
+        const SKYWAY_KEY = '6fbe87c8-9189-42b4-82ee-209f87c10b7b'; 
         
+        let roomContext, localToken, skywayRoom;
+        let dataContext = null; 
+        
+        let currentRoomCode = null;
+        let myRole = null; // "player1"(ホスト) または "player2"(ゲスト)
+        let gameState = {
+            isStarted: false,
+            discardPile: { color: 'red', value: '7' },
+            hands: { player1: [], player2: [] }
+        };
+
         const colors = ['red', 'blue', 'green', 'yellow'];
         const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Skip', 'Reverse'];
-        function getRandomCard() {
-            return {
-                color: colors[Math.floor(Math.random() * colors.length)],
-                value: values[Math.floor(Math.random() * values.length)]
-            };
+        function getRandomCard() { return { color: colors[Math.floor(Math.random()*4)], value: values[Math.floor(Math.random()*12)] }; }
+
+        // 初期化処理
+        async function initSkyWay(roomCode) {
+            document.getElementById('status-display').innerText = "ネットワーク: 接続中...";
+            try {
+                const { SkyWayContext, SkyWayRoom } = skyway_room;
+                roomContext = await SkyWayContext.Create(SKYWAY_KEY);
+                skywayRoom = await SkyWayRoom.FindOrCreate(roomContext, { type: 'p2p', name: 'uno_' + roomCode });
+                localToken = await skywayRoom.join();
+                
+                // データ通信用の通り道を解放
+                dataContext = await skywayRoom.publishData();
+                
+                // 相手からのデータを受信した時のイベント処理
+                skywayRoom.onDataReceived.add(({ data, member }) => {
+                    const message = JSON.parse(data);
+                    handleNetworkMessage(message);
+                });
+
+                document.getElementById('status-display').innerText = `ネットワーク: 接続完了 (${myRole})`;
+                
+                // ゲストが入ってきたらホストが感知してデータを送る
+                if(myRole === "player2") {
+                    sendNetMessage({ type: 'GUEST_JOINED' });
+                }
+            } catch (e) {
+                console.error(e);
+                alert("通信の初期化に失敗しました。時間をおいて試してください。");
+            }
         }
 
-        // 部屋作成
-        document.getElementById('btn-create').addEventListener('click', () => {
-            const code = Math.floor(1000 + Math.random() * 9000).toString();
-            serverRooms[code] = {
-                code: code,
-                isStarted: false,
-                players: { player1: "ホストプレイヤー", player2: null },
-                discardPile: getRandomCard(),
-                hands: {
-                    player1: [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()],
-                    player2: []
+        // メッセージ送信関数
+        function sendNetMessage(obj) {
+            if (dataContext) {
+                dataContext.write(JSON.stringify(obj));
+            }
+        }
+
+        // メッセージ受信ハンドラ（ここで他人の端末の動きをキャッチする）
+        function handleNetworkMessage(msg) {
+            if (msg.type === 'GUEST_JOINED' && myRole === 'player1') {
+                // ゲストが来たら初期の手札を生成してホストが全員に共有
+                gameState.hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
+                sendNetMessage({ type: 'SYNC_STATE', state: gameState });
+                updateWaitingUI();
+            }
+            if (msg.type === 'SYNC_STATE') {
+                gameState = msg.state;
+                if (gameState.isStarted) {
+                    showBattleField();
+                } else {
+                    updateWaitingUI();
                 }
-            };
-            currentRoomCode = code;
-            currentActivePlayer = "player1";
+            }
+        }
+
+        // 部屋新規作成（ホスト）
+        document.getElementById('btn-create').addEventListener('click', async () => {
+            currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+            myRole = "player1";
+            
+            gameState.discardPile = getRandomCard();
+            gameState.hands.player1 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
+
             showWaitingRoom();
-        });
-
-        // 部屋入室
-        document.getElementById('btn-join').addEventListener('click', () => {
-            const code = document.getElementById('room-code-input').value.trim();
-            if(!serverRooms[code]) { alert('部屋が見つかりません'); return; }
-            if(serverRooms[code].players.player2) { alert('満員です'); return; }
-
-            serverRooms[code].players.player2 = "ゲストプレイヤー";
-            serverRooms[code].hands.player2 = [getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard(), getRandomCard()];
-            currentRoomCode = code;
-            currentActivePlayer = "player2";
-            showWaitingRoom();
-        });
-
-        // 待機室表示
-        function showWaitingRoom() {
-            lobbyScreen.classList.add('hidden');
-            waitingScreen.classList.remove('hidden');
-            document.getElementById('waiting-room-code').innerText = currentRoomCode;
+            await initSkyWay(currentRoomCode);
             updateWaitingUI();
+        });
+
+        // 部屋入室（ゲスト）
+        document.getElementById('btn-join').addEventListener('click', async () => {
+            const code = document.getElementById('room-code-input').value.trim();
+            if(code.length !== 4) { alert("4桁のコードを入力してください"); return; }
+            currentRoomCode = code;
+            myRole = "player2";
+
+            showWaitingRoom();
+            document.getElementById('waiting-msg').innerText = "ホストと同期しています...";
+            await initSkyWay(currentRoomCode);
+        });
+
+        function showWaitingRoom() {
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('waiting-screen').classList.remove('hidden');
+            document.getElementById('waiting-room-code').innerText = currentRoomCode;
         }
 
         function updateWaitingUI() {
-            const room = serverRooms[currentRoomCode];
-            if(!room) return;
+            document.getElementById('slot-p1').classList.add('active');
+            document.getElementById('name-p1').innerText = "ホストプレイヤー";
+            document.getElementById('name-p1').style.color = "#00ffcc";
 
-            if(room.players.player1) {
-                document.getElementById('slot-p1').classList.add('active');
-                document.getElementById('name-p1').innerText = room.players.player1;
-                document.getElementById('name-p1').style.color = "#00ffcc";
-            }
-            if(room.players.player2) {
+            if (myRole === "player2" || gameState.hands.player2.length > 0) {
                 document.getElementById('slot-p2').classList.add('active');
-                document.getElementById('name-p2').innerText = room.players.player2;
+                document.getElementById('name-p2').innerText = "ゲストプレイヤー";
                 document.getElementById('name-p2').style.color = "#ffaa00";
-                document.getElementById('waiting-msg').innerText = "全員揃いました！ホストの開始を待っています。";
-                if(currentActivePlayer === "player1") {
+                document.getElementById('waiting-msg').innerText = "対戦相手が接続しました！";
+                
+                if (myRole === "player1") {
                     document.getElementById('btn-start-game').classList.remove('hidden');
                 }
             } else {
-                document.getElementById('slot-p2').classList.remove('active');
-                document.getElementById('name-p2').innerText = "Empty";
-                document.getElementById('btn-start-game').classList.add('hidden');
+                document.getElementById('waiting-msg').innerText = "対戦相手の入室を待っています（4桁コードを相手に伝えてください）";
             }
         }
 
-        // ゲーム開始
+        // ホストがゲーム開始ボタンを押した時
         document.getElementById('btn-start-game').addEventListener('click', () => {
-            serverRooms[currentRoomCode].isStarted = true;
-            renderBattleField();
+            gameState.isStarted = true;
+            sendNetMessage({ type: 'SYNC_STATE', state: gameState });
+            showBattleField();
         });
 
-        function renderBattleField() {
-            waitingScreen.classList.add('hidden');
-            gameScreen.classList.remove('hidden');
+        function showBattleField() {
+            document.getElementById('waiting-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
             updateBattleUI();
         }
 
-        // バトル画面のUI更新（均等配置レイアウトの適用）
         function updateBattleUI() {
-            const room = serverRooms[currentRoomCode];
-            if(!room) return;
+            const oppRole = (myRole === "player1") ? "player2" : "player1";
 
-            const myId = currentActivePlayer;
-            const oppId = (myId === "player1") ? "player2" : "player1";
+            document.getElementById('my-name').innerText = `あなた (${myRole === 'player1' ? 'ホスト' : 'ゲスト'})`;
+            document.getElementById('opp-name').innerText = myRole === 'player1' ? 'ゲストプレイヤー' : 'ホストプレイヤー';
 
-            // 名前表示
-            document.getElementById('my-name').innerText = `あなたの手札 (${room.players[myId]})`;
-            document.getElementById('opp-name').innerText = `${room.players[oppId] || '対戦相手'}`;
-
-            // 場札の更新
+            // 場札の反映
             const discard = document.getElementById('discard-card');
-            discard.className = `card ${room.discardPile.color}`;
-            discard.innerText = room.discardPile.value;
+            discard.className = `card ${gameState.discardPile.color}`;
+            discard.innerText = gameState.discardPile.value;
 
-            // ① 自分の手札（手前に大きく綺麗に並べる）
+            // ① 自分の手札（見える・出せる）
             const myHandDiv = document.getElementById('my-hand');
             myHandDiv.innerHTML = '';
-            room.hands[myId].forEach((card, index) => {
+            gameState.hands[myRole].forEach((card, index) => {
                 const cardEl = document.createElement('div');
                 cardEl.className = `card ${card.color}`;
                 cardEl.innerText = card.value;
@@ -436,10 +269,10 @@
                 myHandDiv.appendChild(cardEl);
             });
 
-            // ② 相手の手札（上部に均等かつ小さめの「裏面」で並べる）
+            // ② 相手の手札（裏面マスク・中身は見えない）
             const oppHandDiv = document.getElementById('opponent-hand');
             oppHandDiv.innerHTML = '';
-            const oppCount = room.hands[oppId] ? room.hands[oppId].length : 0;
+            const oppCount = gameState.hands[oppRole] ? gameState.hands[oppRole].length : 0;
             for(let i=0; i<oppCount; i++) {
                 const cardEl = document.createElement('div');
                 cardEl.className = `card back`;
@@ -447,33 +280,28 @@
             }
         }
 
-        // カードを出す処理
+        // カードを出す
         function playCard(index) {
-            const room = serverRooms[currentRoomCode];
-            const myHand = room.hands[currentActivePlayer];
+            const myHand = gameState.hands[myRole];
             const card = myHand[index];
 
-            if(card.color === room.discardPile.color || card.value === room.discardPile.value) {
-                room.discardPile = myHand.splice(index, 1)[0];
+            if(card.color === gameState.discardPile.color || card.value === gameState.discardPile.value) {
+                gameState.discardPile = myHand.splice(index, 1)[0];
+                // サーバー（通信網）を介して相手に状態を送信
+                sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateBattleUI();
-                if(myHand.length === 0) alert("勝利しました！");
+                if(myHand.length === 0) alert("あなたの勝ちです！");
             } else {
-                alert("同じ色か数字のカードしか出せません！");
+                alert("同じ色か数字しか出せません！");
             }
         }
 
         // カードを引く
         document.getElementById('btn-deck').addEventListener('click', () => {
-            serverRooms[currentRoomCode].hands[currentActivePlayer].push(getRandomCard());
+            gameState.hands[myRole].push(getRandomCard());
+            sendNetMessage({ type: 'SYNC_STATE', state: gameState });
             updateBattleUI();
         });
-
-        // 取消・退室
-        document.getElementById('btn-cancel').addEventListener('click', () => location.reload());
-
-        // デバッグ用視点切り替え
-        document.getElementById('btn-switch-p1').addEventListener('click', () => { currentActivePlayer = "player1"; updateBattleUI(); });
-        document.getElementById('btn-switch-p2').addEventListener('click', () => { currentActivePlayer = "player2"; updateBattleUI(); });
     </script>
 </body>
 </html>
