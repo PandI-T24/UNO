@@ -13,11 +13,13 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             min-height: 100vh; overflow: hidden; box-sizing: border-box;
         }
-        .screen { width: 100vw; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 20px; }
+        .screen { width: 100vw; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 15px; }
         .hidden { display: none !important; }
+        
+        /* ロビー & 待機室用ボックス */
         .centered-box {
-            background: rgba(25, 25, 45, 0.85); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 90%; max-width: 500px; text-align: center; margin: auto;
+            background: rgba(25, 25, 45, 0.85); backdrop-filter: blur(10px); padding: 30px; border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 90%; max-width: 400px; text-align: center; margin: auto;
             border: 1px solid rgba(0, 255, 204, 0.2);
         }
         input {
@@ -37,12 +39,31 @@
         .slots-container { display: flex; justify-content: space-around; margin: 25px 0; gap: 15px; }
         .slot { background: rgba(255,255,255,0.03); border: 2px dashed #444; border-radius: 15px; width: 45%; padding: 15px; }
         .slot.active { border: 2px solid #00ffcc; background: rgba(0,255,204,0.08); }
-        #game-board { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; max-width: 1200px; margin: 0 auto; position: relative; }
-        #opponents-zone { display: flex; justify-content: center; gap: 40px; width: 100%; padding: 10px 0; }
-        .opponent-profile { background: rgba(255, 255, 255, 0.05); padding: 10px 20px; border-radius: 12px; text-align: center; border-top: 3px solid #ff5555; min-width: 200px; }
         
+        /* 📱 縦長画面用バトルフィールド調整 */
+        #game-board { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            height: 100%; 
+            width: 100%; 
+            max-width: 500px; /* スマホ幅に最適化 */
+            margin: 0 auto; 
+            position: relative; 
+        }
+
+        #opponents-zone { width: 100%; padding: 5px 0; }
+        .opponent-profile { 
+            background: rgba(255, 255, 255, 0.05); 
+            padding: 10px; 
+            border-radius: 12px; 
+            text-align: center; 
+            border-top: 3px solid #ff5555; 
+        }
+        
+        /* 📢 ターンインジケーター */
         #turn-indicator {
-            font-size: 20px; font-weight: bold; padding: 10px 30px; border-radius: 30px;
+            font-size: 16px; font-weight: bold; padding: 8px 20px; border-radius: 30px;
             text-align: center; margin: 10px auto; width: fit-content;
             box-shadow: 0 0 15px rgba(0,0,0,0.5); letter-spacing: 1px;
         }
@@ -51,108 +72,158 @@
 
         @keyframes pulse {
             0% { box-shadow: 0 0 5px rgba(0,255,204,0.5); }
-            50% { box-shadow: 0 0 20px rgba(0,255,204,0.8); }
+            50% { box-shadow: 0 0 15px rgba(0,255,204,0.8); }
             100% { box-shadow: 0 0 5px rgba(0,255,204,0.5); }
         }
 
-        #center-field { display: flex; justify-content: center; align-items: center; gap: 50px; flex-grow: 1; }
-        #my-zone { width: 100%; padding: 20px 0; background: linear-gradient(to top, rgba(0,255,204,0.1), transparent); border-radius: 20px 20px 0 0; border-top: 1px solid rgba(0,255,204,0.2); text-align: center; }
-        .card-container { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+        /* 中央エリア */
+        #center-field { display: flex; justify-content: center; align-items: center; gap: 30px; flex-grow: 1; }
         
-        .card {
-            width: 80px; height: 120px; border-radius: 10px; font-size: 24px; font-weight: bold; color: white;
-            display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.5);
-            border: 2px solid rgba(255,255,255,0.2); transition: all 0.2s ease;
+        /* ⭐️ 手札エリア（スライドスクロール対応） */
+        #my-zone { 
+            width: 100%; 
+            padding: 15px 0; 
+            background: linear-gradient(to top, rgba(0,255,204,0.1), transparent); 
+            border-radius: 20px 20px 0 0; 
+            border-top: 1px solid rgba(0,255,204,0.2); 
+            text-align: center;
+            box-sizing: border-box;
         }
-        .card:hover { transform: translateY(-20px); z-index: 10; box-shadow: 0 12px 24px rgba(0,255,204,0.4); }
+
+        /* スライドできるように設定 */
+        .card-container { 
+            display: flex; 
+            justify-content: flex-start; /* 左詰めで並べる */
+            gap: 10px; 
+            overflow-x: auto; /* はみ出したら横スクロール可能に */
+            padding: 15px 10px 25px 10px; /* ホバーで浮き上がる余白を確保 */
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch; /* iOSの滑らかなスクロール対応 */
+        }
+
+        /* スクロールバーの見た目をすっきりさせる（任意） */
+        .card-container::-webkit-scrollbar { height: 6px; }
+        .card-container::-webkit-scrollbar-thumb { background: rgba(0, 255, 204, 0.3); border-radius: 3px; }
         
-        .card.disabled-card { opacity: 0.4; cursor: not-allowed; filter: grayscale(50%); }
-        .card.disabled-card:hover { transform: none; box-shadow: 0 6px 12px rgba(0,0,0,0.5); }
+        /* 相手の手札はコンパクトに並べる */
+        #opponent-hand {
+            justify-content: center;
+            overflow-x: hidden; /* 相手側はスクロール不要 */
+            padding: 5px;
+        }
+
+        /* カードのサイズバランス調整 */
+        .card {
+            flex: 0 0 75px; /* 横スクロール内で潰れないよう幅を固定 */
+            height: 110px; 
+            border-radius: 10px; 
+            font-size: 22px; 
+            font-weight: bold; 
+            color: white;
+            display: flex; justify-content: center; align-items: center; 
+            cursor: pointer; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.2); 
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover { transform: translateY(-15px); z-index: 10; box-shadow: 0 8px 20px rgba(0,255,204,0.4); }
+        
+        .card.disabled-card { opacity: 0.3; cursor: not-allowed; filter: grayscale(70%); }
+        .card.disabled-card:hover { transform: none; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
 
         .card.back {
-            width: 45px; height: 65px; background: linear-gradient(135deg, #cc3333 0%, #881111 100%) !important;
-            border: 2px solid #fff !important; cursor: not-allowed;
+            flex: 0 0 35px; height: 50px; font-size: 0;
+            background: linear-gradient(135deg, #cc3333 0%, #881111 100%) !important;
+            border: 1px solid #fff !important; cursor: not-allowed;
         }
         .red { background: linear-gradient(135deg, #ff5555 0%, #aa2222 100%); }
         .blue { background: linear-gradient(135deg, #5555ff 0%, #2222aa 100%); }
         .green { background: linear-gradient(135deg, #55aa55 0%, #226622 100%); }
         .yellow { background: linear-gradient(135deg, #ffaa00 0%, #996600 100%); }
         
-        #btn-deck { width: 85px; height: 125px; background: #222; border: 2px solid #00ffcc; border-radius: 10px; color: #00ffcc; font-weight: bold; cursor: pointer; }
+        #btn-deck { width: 80px; height: 110px; background: #222; border: 2px solid #00ffcc; border-radius: 10px; color: #00ffcc; font-weight: bold; cursor: pointer; font-size: 14px; }
         #btn-deck.disabled-deck { opacity: 0.3; cursor: not-allowed; border-color: #555; color: #555; }
 
-        /* 👑 公式追加：引いたカードをどうするか選ぶモーダル */
+        /* 公式選択モーダル */
         .choice-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
         }
-        .choice-box { background: #222; padding: 30px; border-radius: 15px; border: 2px solid #00ffcc; text-align: center; }
+        .choice-box { background: #222; padding: 25px; border-radius: 15px; border: 2px solid #00ffcc; text-align: center; width: 80%; max-width: 320px; }
 
-        .status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 12px; color: #aaa; }
+        .status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 11px; color: #aaa; z-index: 100; }
     </style>
 </head>
 <body>
 
     <div id="status-display" class="status-bar">ネットワーク: サーバー接続中...</div>
 
+    <!-- ================= 1. ロビー ================= -->
     <div id="lobby-screen" class="screen">
         <div class="centered-box">
-            <h1 style="color: #00ffcc;">UNO MULTIPLAYER</h1>
-            <p style="color: #888;">公式ルール完全準拠・リアルタイム対戦</p>
+            <h1 style="color: #00ffcc; font-size: 28px; margin: 0 0 10px 0;">UNO</h1>
+            <p style="color: #888; font-size: 14px;">公式ルール完全準拠・スライド手札対応</p>
             <hr style="border:0; border-top:1px solid #222; margin:20px 0;">
             <button id="btn-create">部屋を新規作成</button>
-            <div style="margin: 20px 0; color: #555;">OR</div>
+            <div style="margin: 15px 0; color: #555;">OR</div>
             <input type="text" id="room-code-input" placeholder="4桁コード" maxlength="4">
             <br>
             <button id="btn-join" style="background:#ffaa00; color:#000;">部屋に入る</button>
         </div>
     </div>
 
+    <!-- ================= 2. 待機室 ================= -->
     <div id="waiting-screen" class="screen hidden">
         <div class="centered-box">
-            <h2 style="color:#00ffcc;">MATCHING ROOM</h2>
+            <h2 style="color:#00ffcc; font-size: 20px;">MATCHING ROOM</h2>
             <div id="waiting-room-code" class="room-code-tag">----</div>
             <div class="slots-container">
-                <div id="slot-p1" class="slot"><div>👑</div><div id="name-p1">Empty</div></div>
-                <div id="slot-p2" class="slot"><div>👤</div><div id="name-p2">Empty</div></div>
+                <div id="slot-p1" class="slot"><div>👑</div><div id="name-p1" style="font-size:12px;">Empty</div></div>
+                <div id="slot-p2" class="slot"><div>👤</div><div id="name-p2" style="font-size:12px;">Empty</div></div>
             </div>
-            <p id="waiting-msg" style="color:#888; font-size:14px; margin-bottom:20px;">相手の接続を待っています...</p>
+            <p id="waiting-msg" style="color:#888; font-size:13px; margin-bottom:20px;">相手の接続を待っています...</p>
             <button id="btn-start-game" class="hidden" style="width:100%; padding:15px; background:#00ffcc;">ゲームを開始する</button>
         </div>
     </div>
 
+    <!-- ================= 3. バトルフィールド ================= -->
     <div id="game-screen" class="screen hidden">
         
+        <!-- 公式選択モーダル -->
         <div id="choice-screen" class="choice-overlay hidden">
             <div class="choice-box">
-                <h3 style="color:#00ffcc; margin-top:0;">カードを引きました！</h3>
-                <p>このカードは今すぐ場に出せます。どうしますか？</p>
-                <div id="drawn-card-preview" style="margin: 20px auto;" class="card red">7</div>
-                <div style="display:flex; gap:15px; justify-content:center;">
-                    <button id="btn-choice-play" style="background:#00ffcc; color:#000;">今すぐ出す</button>
-                    <button id="btn-choice-keep" style="background:#555; color:#fff;">手札にキープ(パス)</button>
+                <h3 style="color:#00ffcc; margin-top:0; font-size: 18px;">カードを引きました！</h3>
+                <p style="font-size: 14px;">このカードは今すぐ場に出せます。どうしますか？</p>
+                <div id="drawn-card-preview" style="margin: 15px auto;" class="card red">7</div>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button id="btn-choice-play" style="background:#00ffcc; color:#000; padding:10px 20px; font-size:14px;">出す</button>
+                    <button id="btn-choice-keep" style="background:#555; color:#fff; padding:10px 15px; font-size:14px;">キープ</button>
                 </div>
             </div>
         </div>
 
         <div id="game-board">
+            <!-- 相手エリア -->
             <div id="opponents-zone">
                 <div class="opponent-profile">
-                    <div id="opp-name" style="font-weight: bold; font-size:14px; color:#ff5555;">対戦相手</div>
+                    <div id="opp-name" style="font-weight: bold; font-size:13px; color:#ff5555; margin-bottom:5px;">対戦相手</div>
                     <div id="opponent-hand" class="card-container"></div>
                 </div>
             </div>
 
+            <!-- ターン表示 -->
             <div id="turn-indicator" class="my-turn-bg">あなたの番です</div>
 
+            <!-- 中央（山札と場札） -->
             <div id="center-field">
                 <div><button id="btn-deck">DRAW</button></div>
                 <div><div id="discard-card" class="card red">7</div></div>
             </div>
 
+            <!-- 自分エリア（ここが横スクロールします） -->
             <div id="my-zone">
-                <div id="my-name" style="font-weight:bold; color:#00ffcc; font-size:14px;">YOUR HAND</div>
+                <div id="my-name" style="font-weight:bold; color:#00ffcc; font-size:13px;">YOUR HAND</div>
                 <div id="my-hand" class="card-container"></div>
             </div>
         </div>
@@ -163,7 +234,7 @@
         let conn = null;
         let currentRoomCode = null;
         let myRole = null; 
-        let tempDrawnCard = null; // 引いたカードの一時保存用
+        let tempDrawnCard = null; 
         
         let gameState = {
             isStarted: false,
@@ -276,6 +347,7 @@
             discard.className = `card ${gameState.discardPile.color}`;
             discard.innerText = gameState.discardPile.value;
 
+            // ① 自分の手札（横スクロール可能）
             const myHandDiv = document.getElementById('my-hand');
             myHandDiv.innerHTML = '';
             gameState.hands[myRole].forEach((card, index) => {
@@ -286,6 +358,7 @@
                 myHandDiv.appendChild(cardEl);
             });
 
+            // ② 相手の手札（コンパクト表示）
             const oppHandDiv = document.getElementById('opponent-hand');
             oppHandDiv.innerHTML = '';
             const oppCount = gameState.hands[oppRole] ? gameState.hands[oppRole].length : 0;
@@ -296,7 +369,6 @@
             }
         }
 
-        // 手札から通常通りカードを出す場合（1枚出したら即ターン終了）
         function playCard(index) {
             if (gameState.currentTurn !== myRole) return;
             const myHand = gameState.hands[myRole];
@@ -304,7 +376,7 @@
 
             if(card.color === gameState.discardPile.color || card.value === gameState.discardPile.value) {
                 gameState.discardPile = myHand.splice(index, 1)[0];
-                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // 交代
+                gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
                 updateBattleUI();
                 if(myHand.length === 0) alert("あなたの勝ちです！");
@@ -313,24 +385,17 @@
             }
         }
 
-        // 👑 山札からカードを引く処理（公式ルール準拠）
         document.getElementById('btn-deck').addEventListener('click', () => {
             if (gameState.currentTurn !== myRole) return;
-
-            // 山札から1枚生成
             tempDrawnCard = getRandomCard();
-
-            // 引いたカードが場に出せるかチェック
             const canPlay = (tempDrawnCard.color === gameState.discardPile.color || tempDrawnCard.value === gameState.discardPile.value);
 
             if (canPlay) {
-                // 出せる場合はポップアップを表示してプレイヤーに選択させる（ターンはまだ交代しない）
                 const preview = document.getElementById('drawn-card-preview');
                 preview.className = `card ${tempDrawnCard.color}`;
                 preview.innerText = tempDrawnCard.value;
                 document.getElementById('choice-screen').classList.remove('hidden');
             } else {
-                // 出せない場合は自動で手札に加え、そのままパス（ターン交代）
                 gameState.hands[myRole].push(tempDrawnCard);
                 gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
                 sendNetMessage({ type: 'SYNC_STATE', state: gameState });
@@ -339,20 +404,18 @@
             }
         });
 
-        // 👑 モーダル選択肢1：「今すぐ出す」を選んだ場合
         document.getElementById('btn-choice-play').addEventListener('click', () => {
             document.getElementById('choice-screen').classList.add('hidden');
-            gameState.discardPile = tempDrawnCard; // 場に出す
-            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // ターン交代
+            gameState.discardPile = tempDrawnCard;
+            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
             updateBattleUI();
         });
 
-        // 👑 モーダル選択肢2：「手札にキープ」を選んだ場合
         document.getElementById('btn-choice-keep').addEventListener('click', () => {
             document.getElementById('choice-screen').classList.add('hidden');
-            gameState.hands[myRole].push(tempDrawnCard); // 手札に入れる
-            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1"; // ターン交代
+            gameState.hands[myRole].push(tempDrawnCard);
+            gameState.currentTurn = (myRole === "player1") ? "player2" : "player1";
             sendNetMessage({ type: 'SYNC_STATE', state: gameState });
             updateBattleUI();
         });
